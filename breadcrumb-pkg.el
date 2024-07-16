@@ -1,0 +1,2 @@
+;; Generated package description from breadcrumb.el  -*- no-byte-compile: t -*-
+(define-package "breadcrumb" "1.0.1.0.20231126.221621" "project and imenu-based breadcrumb paths" '((emacs "28.1") (project "0.9.8")) :commit "dcb6e2e82de2432d8eb75be74c8d6215fc97a2d3" :url "https://elpa.gnu.org/packages/breadcrumb.html" :authors '(("João Távora" . "joaotavora@gmail.com")) :maintainer '("João Távora" . "joaotavora@gmail.com"))
