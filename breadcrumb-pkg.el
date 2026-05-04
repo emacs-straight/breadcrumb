@@ -1,2 +1,2 @@
-;; Generated package description from breadcrumb.el  -*- mode: lisp-data; no-byte-compile: t -*-
-(define-package "breadcrumb" "1.0.1.0.20260110.120308" "project and imenu-based breadcrumb paths" '((emacs "28.1") (project "0.9.8")) :commit "1d9dd90f77a594cd50b368e6efc85d44539ec209" :url "https://elpa.gnu.org/packages/breadcrumb.html" :authors '(("João Távora" . "joaotavora@gmail.com")) :maintainer '("João Távora" . "joaotavora@gmail.com"))
+;; Generated package description from breadcrumb.el  -*- mode: lisp-data; no-byte-compile: t; lexical-binding:t -*-
+(define-package "breadcrumb" "1.0.1.0.20260503.101608" "project and imenu-based breadcrumb paths" '((emacs "28.1") (project "0.9.8")) :commit "04c50e32e8f32afd68242e4dc28da02e8a45e237" :url "https://elpa.gnu.org/packages/breadcrumb.html" :authors '(("João Távora" . "joaotavora@gmail.com")) :maintainer '("João Távora" . "joaotavora@gmail.com"))
