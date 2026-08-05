@@ -454,26 +454,36 @@ propertized crumbs."
 ;;
 
 ;;;###autoload
-(setq breadcrumb-opinionated-mlf
-  '("%e"
+(defcustom breadcrumb-opinionated-mlf
+  '((:eval (bc--fancy-stub t))
+    "%e"
     mode-line-modified
     (:eval (bc-project-crumbs))
-    " "
+    (:eval (bc--fancy-stub nil))
     (:propertize " " face default)
-    (:eval (bc-imenu-crumbs))
+    (:eval (bc--fancy-imenu-crumbs))
+    (:propertize " " face default)
     mode-line-format-right-align
+    (:eval (bc--fancy-stub t))
     (vc-mode vc-mode)
-    "  "
+    " "
     mode-line-modes
     mode-line-misc-info
     " %p%   %l:%c"
-    (:eval (format-time-string "  %H:%M"))))
+    (:eval (format-time-string "  %H:%M"))
+    (:eval (bc--fancy-stub nil))
+    (:propertize " " face default))
+  "A `mode-line-format' with breadcrumb project and imenu crumbs.
+Replaces `mode-line-buffer-identification' with the output of
+`breadcrumb-project-crumbs' and `breadcrumb-imenu-crumbs'."
+  :type '(repeat sexp))
 
 (defcustom bc-opinionated-diminished-modes
   '(yas-minor-mode eldoc-mode company-mode whitespace-mode
     which-key-mode)
   "Minor modes whose lighters are hidden by `breadcrumb-opinionated-mode'."
   :type '(repeat symbol))
+
 
 (defvar bc--saved-mlf)
 (defvar bc--saved-lighters nil)
@@ -482,6 +492,38 @@ propertized crumbs."
   (when-let* ((cell (assq mode minor-mode-alist)))
     (push (cons mode (cadr cell)) bc--saved-lighters)
     (setcar (cdr cell) "")))
+
+(defcustom bc-fancy-stub-chars (cons ?\ue0b6 ?\ue0b4)
+  "Cons (OPENING . CLOSING) of characters bracketing fancy mode-line stubs."
+  :type '(choice (cons :tag "Rounded" (const ?\ue0b6) (const ?\ue0b4))
+                 (cons :tag "Angled" (const ?\ue0b2) (const ?\ue0b0))
+                 (cons :tag "Slant" (const ?\ue0ba) (const ?\ue0b8))
+                 (cons :tag "Backslant" (const ?\ue0be) (const ?\ue0bc))
+                 (cons :tag "Custom" character character)))
+
+(defvar bc--fancy-stub-cache (make-hash-table :test 'equal)
+  "Cache of `bc--fancy-stub' results, keyed by (CHAR . SELECTED).
+Each value is (BG . STRING), recomputed when BG no longer matches.")
+
+(defun bc--fancy-stub (opening)
+  (let ((char (if opening (car bc-fancy-stub-chars) (cdr bc-fancy-stub-chars))))
+    (if (not (char-displayable-p char))
+        ""
+      (let* ((selected (mode-line-window-selected-p))
+             (key (cons char selected))
+             (bg (face-attribute (if selected 'mode-line 'mode-line-inactive) :background))
+             (cached (gethash key bc--fancy-stub-cache)))
+        (if (and cached (equal (car cached) bg))
+            (cdr cached)
+          (let ((str (propertize (string char) 'face
+                                  `(:inherit default :foreground ,bg))))
+            (puthash key (cons bg str) bc--fancy-stub-cache)
+            str))))))
+
+(cl-defun bc--fancy-imenu-crumbs ()
+  (let ((retval (breadcrumb-imenu-crumbs)))
+    (when (cl-plusp (length retval))
+      (concat (bc--fancy-stub t) retval (bc--fancy-stub nil)))))
 
 ;;;###autoload
 (define-minor-mode breadcrumb-opinionated-mode
