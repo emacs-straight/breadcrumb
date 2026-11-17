@@ -4,7 +4,7 @@
 
 ;; Author: João Távora <joaotavora@gmail.com>
 ;; Package-Requires: ((emacs "28.1") (project "0.9.8"))
-;; Version: 1.0.1
+;; Version: 1.1.0
 ;; Keywords:
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -165,15 +165,22 @@ index, unless FROM-END is t.  KEY is as usual in other CL land."
     (if from-end (if key (search t key) (search t nil))
       (if key (search nil key) (search nil nil)))))
 
+(defun bc--region (name)
+  "Get (BEG . END) region of Imenu node NAME, or nil.
+Prefer the `imenu-region' property, fall back to the older
+`breadcrumb-region' (github#48)."
+  (or (get-text-property 0 'imenu-region name)
+      (get-text-property 0 'breadcrumb-region name)))
+
 (defun bc--ipath-rich (index-alist pos)
   "Compute ipath for rich `imenu--index-alist' structures.
-These structures have a `breadcrumb-region' property on every
-node."
+These structures have an `imenu-region' or `breadcrumb-region'
+property on every node."
   (cl-labels
       ((search (nodes &optional ipath)
          (cl-loop
           for n in nodes
-          for reg = (get-text-property 0 'breadcrumb-region (car n))
+          for reg = (bc--region (car n))
           when (<= (car reg) pos (cdr reg))
           return (search (cdr n) (cons
                                   (propertize (car n)
@@ -188,39 +195,49 @@ node."
 
 (defun bc--ipath-plain (index-alist pos)
   "Compute ipath for plain `imenu--index-alist' structures.
-These structures don't have a `breadcrumb-region' property on."
+These structures don't have region properties on."
   (cl-labels ((dfs (n &optional ipath siblings)
                 (setq ipath (cons (car n) ipath))
-                (if (consp (cdr n))
-                    (mapc (lambda (n2) (dfs n2 ipath (cdr n))) (cdr n))
+                (cond
+                 ((imenu--subalist-p n)
+                  (mapcan (lambda (n2) (dfs n2 ipath (cdr n))) (cdr n)))
+                 ;; Empty submenus or "special elements" (NAME POS
+                 ;; FUNCTION ARGS...), whose POS isn't necessarily a
+                 ;; buffer position (github#51).  See docstring of
+                 ;; `imenu--index-alist'.
+                 ((listp (cdr n)) nil)
+                 (t
                   ;; FIXME: we convert markers to points via the `+'
                   ;; down there.  But for siblings, no such conversion
                   ;; happens, they might still point to invalid
                   ;; markers.  Not worth doing another tree traversal
                   ;; for that IMO, and siblings seems to be unused
                   ;; anyway (github#22)
-                  (put-text-property 0 1 'breadcrumb-siblings (cdr siblings) (car ipath))
-                  (setq bc--ipath-plain-cache
-                        (vconcat bc--ipath-plain-cache
-                                 `[,(cons
-                                     ;; See github#17 and docstring of
-                                     ;; `imenu--index-alist' for the
-                                     ;; "overlay" edge case.
-                                     (cl-etypecase (cdr n)
-                                       (number (cdr n))
-                                       (marker (+ (cdr n) 0))
-                                       (overlay (overlay-start (cdr n))))
-                                     ipath)])))))
+                  (unless (string-empty-p (car ipath)) ; github#36
+                    (put-text-property 0 1 'breadcrumb-siblings (cdr siblings)
+                                       (car ipath)))
+                  (list (cons
+                         ;; See github#17 and docstring of
+                         ;; `imenu--index-alist' for the
+                         ;; "overlay" edge case.
+                         (cl-etypecase (cdr n)
+                           (number (cdr n))
+                           (marker (+ (cdr n) 0))
+                           (overlay (overlay-start (cdr n))))
+                         ipath))))))
     (unless bc--ipath-plain-cache
-      (mapc (lambda (i) (dfs i nil index-alist)) index-alist)
-      (setq bc--ipath-plain-cache (cl-sort bc--ipath-plain-cache #'< :key #'car)))
-    (unless (< pos (car (aref bc--ipath-plain-cache 0)))
+      (setq bc--ipath-plain-cache
+            (cl-sort (vconcat (mapcan (lambda (i) (dfs i nil index-alist))
+                                      index-alist))
+                     #'< :key #'car)))
+    (when (and (length> bc--ipath-plain-cache 0)
+               (>= pos (car (aref bc--ipath-plain-cache 0))))
       (let ((res (bc--bisect bc--ipath-plain-cache pos :key #'car :from-end t)))
         (unless (zerop res) (reverse (cdr (elt bc--ipath-plain-cache (1- res)))))))))
 
 (defun bc-ipath (index-alist pos)
   "Get breadcrumb for position POS given INDEX-ALIST."
-  (if (get-text-property 0 'breadcrumb-region (caar index-alist))
+  (if (bc--region (caar index-alist))
       (bc--ipath-rich index-alist pos)
     (bc--ipath-plain index-alist pos)))
 
@@ -318,7 +335,8 @@ with SEPARATOR."
           for available = (- cutoff used)
           for (c . more) on (reverse crumbs)
           for seplen = (if more (length separator) 0)
-          for shorten-p = (unless (get-text-property 0 'bc-dont-shorten c)
+          for shorten-p = (unless (or (string-empty-p c)
+                                      (get-text-property 0 'bc-dont-shorten c))
                             (> (+ (length c) seplen) available))
           for toadd = (if shorten-p (substring c 0 1) c)
           sum (+ (length toadd) seplen) into used
@@ -436,7 +454,7 @@ propertized crumbs."
            (cl-loop
             for n in nodes
             for newpath = (cons (car n) ipath)
-            for pos = (or (car (get-text-property 0 'breadcrumb-region (car n)))
+            for pos = (or (car (bc--region (car n)))
                           (and (number-or-marker-p (cdr n)) (cdr n)))
             when pos do (push (cons (fmt (reverse newpath)) pos)
                               cands)
